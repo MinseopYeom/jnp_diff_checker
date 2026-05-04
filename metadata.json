@@ -1,0 +1,6 @@
+{
+  "name": "Excel Diff Checker",
+  "description": "Compare two Excel files side-by-side and highlight differences in sheets, rows, and cells.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
