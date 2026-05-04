@@ -48,12 +48,12 @@ export const FilePreview: React.FC<FilePreviewProps> = ({
       </div>
 
       <div className={cn("relative overflow-auto bg-white custom-scrollbar", isExpanded ? "flex-1" : "max-h-[400px]")}>
-        <table className={cn("text-xs text-left border-collapse", isExpanded ? "w-max min-w-full" : "w-full table-fixed")}>
+        <table className="text-xs text-left border-collapse w-max min-w-full table-auto">
           <thead className="sticky top-0 z-20 bg-slate-50">
             <tr>
-              <th className="w-12 border-b border-r border-slate-200 bg-slate-100"></th>
+              <th className="w-12 border-b border-r border-slate-200 bg-slate-100 sticky left-0 z-30"></th>
               {colLetters.map(letter => (
-                <th key={letter} className={cn("px-3 py-2 border-b border-r border-slate-200 text-center font-medium text-slate-400 uppercase tracking-wider", !isExpanded && "w-32")}>
+                <th key={letter} className="px-3 py-2 border-b border-r border-slate-200 text-center font-medium text-slate-400 uppercase tracking-wider min-w-[120px]">
                   {letter}
                 </th>
               ))}
@@ -72,10 +72,10 @@ export const FilePreview: React.FC<FilePreviewProps> = ({
                     <td 
                       key={colIndex} 
                       className={cn(
-                        "px-3 py-2 border-r border-b border-slate-100 h-10 break-words whitespace-normal",
-                        !isExpanded && "truncate",
+                        "px-3 py-2 border-r border-b border-slate-100 h-10 whitespace-nowrap overflow-hidden text-ellipsis max-w-[300px]",
                         isHeader && "font-bold text-blue-700 border-b-blue-200"
                       )}
+                      title={String(row[colIndex] ?? '')}
                     >
                       {String(row[colIndex] ?? '')}
                     </td>

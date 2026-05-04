@@ -205,7 +205,11 @@ export default function App() {
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <button 
+            onClick={reset}
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity active:scale-95 cursor-pointer text-left"
+            title="Reset to home"
+          >
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
               <ArrowRightLeft className="w-6 h-6" />
             </div>
@@ -213,7 +217,7 @@ export default function App() {
               <h1 className="font-bold text-lg tracking-tight">JNPEMDI</h1>
               <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest leading-none">Excel Diff Checker</p>
             </div>
-          </div>
+          </button>
 
           <div className="flex items-center gap-4">
             <div className="hidden sm:flex items-center gap-3 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-full">
@@ -254,14 +258,12 @@ export default function App() {
               {/* File 1 Slot */}
               <div className="flex flex-col gap-4">
                 {!file1 ? (
-                  <div className="flex-1 min-h-[400px] flex items-center justify-center bg-white rounded-2xl border-2 border-dashed border-slate-200">
-                    <FileUpload
-                      label="Select Original File"
-                      file={file1}
-                      onFileSelect={setFile1}
-                      className="w-full max-w-sm"
-                    />
-                  </div>
+                  <FileUpload
+                    label="Select Original File"
+                    file={file1}
+                    onFileSelect={setFile1}
+                    className="flex-1 min-h-[400px]"
+                  />
                 ) : (
                   <FilePreview
                     fileName={file1.name}
@@ -279,14 +281,12 @@ export default function App() {
               {/* File 2 Slot */}
               <div className="flex flex-col gap-4">
                 {!file2 ? (
-                  <div className="flex-1 min-h-[400px] flex items-center justify-center bg-white rounded-2xl border-2 border-dashed border-slate-200">
-                    <FileUpload
-                      label="Select Modified File"
-                      file={file2}
-                      onFileSelect={setFile2}
-                      className="w-full max-w-sm"
-                    />
-                  </div>
+                  <FileUpload
+                    label="Select Modified File"
+                    file={file2}
+                    onFileSelect={setFile2}
+                    className="flex-1 min-h-[400px]"
+                  />
                 ) : (
                   <FilePreview
                     fileName={file2.name}
