@@ -14,7 +14,7 @@ export function LoginPage({ onLoginSuccess, error }: LoginPageProps) {
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-100/50 rounded-full blur-3xl" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-teal-50/50 rounded-full blur-3xl" />
 
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md bg-white rounded-[32px] shadow-2xl shadow-slate-200/50 border border-slate-100 p-8 md:p-12 relative z-10"
@@ -23,7 +23,7 @@ export function LoginPage({ onLoginSuccess, error }: LoginPageProps) {
           <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-200 mb-6">
             <ArrowRightLeft className="w-8 h-8" />
           </div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Welcome Back</h1>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-2">JNP Diff Checker</h1>
           <p className="text-slate-500 font-medium max-w-[280px]">
             Please sign in with your <span className="text-blue-600 font-bold">@jnpmedi.com</span> account to continue.
           </p>
@@ -49,7 +49,7 @@ export function LoginPage({ onLoginSuccess, error }: LoginPageProps) {
           </div>
 
           {error && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               className="bg-red-50 border border-red-100 rounded-2xl p-4 flex items-start gap-3"
