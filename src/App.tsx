@@ -1,15 +1,30 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { RefreshCw, Layers, FileSearch, ArrowRightLeft, AlertCircle, PlayCircle, Download, Filter } from 'lucide-react';
+import { RefreshCw, Layers, FileSearch, ArrowRightLeft, AlertCircle, PlayCircle, Download, Filter, LogOut, User } from 'lucide-react';
 import { FileUpload } from './components/FileUpload';
 import { DiffTable } from './components/DiffTable';
 import { FilePreview } from './components/FilePreview';
+import { LoginPage } from './components/LoginPage';
 import { parseExcelFile, compareSheets, getSheetData } from './lib/excel';
 import { ComparisonResult, SheetDiff } from './types';
 import { cn } from './lib/utils';
 import * as XLSX from 'xlsx';
+import { jwtDecode } from 'jwt-decode';
+
+interface GoogleUser {
+  email: string;
+  name: string;
+  picture: string;
+  hd?: string; // hosted domain
+}
 
 export default function App() {
+  const [user, setUser] = useState<GoogleUser | null>(() => {
+    const saved = localStorage.getItem('jnp_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [authError, setAuthError] = useState<string | null>(null);
+
   const [file1, setFile1] = useState<File | null>(null);
   const [file2, setFile2] = useState<File | null>(null);
 
@@ -26,6 +41,32 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ComparisonResult | null>(null);
   const [showOnlyDiffs, setShowOnlyDiffs] = useState(false);
+
+  const handleLoginSuccess = (credential: string) => {
+    try {
+      const decoded: GoogleUser = jwtDecode(credential);
+      
+      // Security Check: Only @jnpmedi.com domain allowed
+      // Check both email suffix and hosted domain (hd) field for robustness
+      const isAuthorized = decoded.email.endsWith('@jnpmedi.com') || decoded.hd === 'jnpmedi.com';
+
+      if (isAuthorized) {
+        setUser(decoded);
+        localStorage.setItem('jnp_user', JSON.stringify(decoded));
+        setAuthError(null);
+      } else {
+        setAuthError("This service is restricted to @jnpmedi.com accounts only. Please sign in with your corporate email.");
+      }
+    } catch (err) {
+      setAuthError("Failed to authenticate. Please try again.");
+    }
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('jnp_user');
+    reset();
+  };
 
   // Load Workbooks when files change
   useEffect(() => {
@@ -155,6 +196,10 @@ export default function App() {
     return result.sheets[0]?.rows.length || 0;
   }, [result]);
 
+  if (!user) {
+    return <LoginPage onLoginSuccess={handleLoginSuccess} error={authError} />;
+  }
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-blue-100 selection:text-blue-900">
       {/* Header */}
@@ -170,14 +215,35 @@ export default function App() {
             </div>
           </div>
 
-          {result && (
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:flex items-center gap-3 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-full">
+              {user.picture ? (
+                <img src={user.picture} alt={user.name} className="w-6 h-6 rounded-full ring-2 ring-white" />
+              ) : (
+                <User className="w-4 h-4 text-slate-400" />
+              )}
+              <span className="text-xs font-bold text-slate-600">{user.email}</span>
+            </div>
+
+            <div className="h-4 w-px bg-slate-200 hidden sm:block" />
+
             <button
-              onClick={reset}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg transition-colors group"
             >
-              <RefreshCw className="w-4 h-4" /> Reset
+              <LogOut className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              Sign Out
             </button>
-          )}
+
+            {result && (
+              <button
+                onClick={reset}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" /> Reset
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
