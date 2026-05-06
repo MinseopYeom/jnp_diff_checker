@@ -204,7 +204,7 @@ export default function App() {
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-blue-100 selection:text-blue-900">
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="max-w-full px-6 h-16 flex items-center justify-between">
           <button 
             onClick={reset}
             className="flex items-center gap-3 hover:opacity-80 transition-opacity active:scale-95 cursor-pointer text-left"
@@ -330,7 +330,7 @@ export default function App() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col gap-6 max-w-[1600px] mx-auto w-full"
+            className="flex flex-col gap-6 max-w-full mx-auto w-full"
           >
             {/* Report Header - Professional Diffchecker Style */}
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xl flex flex-col xl:flex-row items-center justify-between gap-6 overflow-hidden">
@@ -403,7 +403,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="py-12 px-4 border-t border-slate-200 mt-auto">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 opacity-50">
+        <div className="max-w-full px-6 flex flex-col md:flex-row items-center justify-between gap-6 opacity-50">
           <p className="text-sm">© 2026 Excel Diff Checker. Secure & Local.</p>
           <div className="flex items-center gap-4 text-sm font-medium">
             <a href="#" className="hover:text-blue-600 transition-colors">Documentation</a>
