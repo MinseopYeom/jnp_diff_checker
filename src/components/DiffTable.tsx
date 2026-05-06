@@ -96,7 +96,6 @@ export const DiffTable: React.FC<DiffTableProps> = ({ sheet, showOnlyDiffs = fal
                         "px-4 py-2 align-middle border-r border-slate-100 last:border-0 transition-colors text-[11px] whitespace-nowrap",
                         row.type === 'added' && "bg-[#f0fff4]",
                         row.type === 'removed' && "bg-[#fff5f5]",
-                        isMintCol && "bg-[#ebfefb]/60"
                       )}
                       title={cell.type === 'modified' ? `Old: ${cell.oldValue}\nNew: ${cell.newValue}` : String(cell.value ?? cell.newValue ?? cell.oldValue ?? '')}
                     >
@@ -123,11 +122,7 @@ export const DiffTable: React.FC<DiffTableProps> = ({ sheet, showOnlyDiffs = fal
                           {String(cell.oldValue ?? '')}
                         </span>
                       ) : (
-                        <span className={cn(
-                          "text-slate-700 leading-tight block px-1",
-                          String(cell.value).trim().toUpperCase() === 'O' && "text-[#ef4444] font-black text-center text-[13px] scale-x-110",
-                          isMintCol && "text-teal-700 font-medium"
-                        )}>
+                        <span className="text-slate-700 leading-tight block px-1">
                           {String(cell.value ?? '')}
                         </span>
                       )}
