@@ -36,40 +36,34 @@ export const compareSheets = (
   sheet1Name: string,
   sheet2Name: string,
   headerRow1: number = 0,
-  headerRow2: number = 0
+  headerRow2: number = 0,
+  uniqueColumns: string[] = []
 ): SheetDiff => {
   // Normalize headers
   const h1 = (data1[headerRow1] || []).map(h => String(h || '').trim());
   const h2 = (data2[headerRow2] || []).map(h => String(h || '').trim());
   
-  // Find headers common to both (for stricter identity matching)
-  const commonHeaders = h1.filter(h => h && h2.includes(h));
   const allHeadersSet = new Set([...h1, ...h2]);
   allHeadersSet.delete('');
   const allHeaders = Array.from(allHeadersSet);
 
-  // Find potential identity columns
-  const identityKeywords = ['CODE', 'ID', 'PRIVILEGE', 'NAME', '번호', '코드', 'DESCRIPTION'];
-  const identityCols = allHeaders.filter(h => 
-    identityKeywords.some(k => h.toUpperCase().includes(k.toUpperCase()))
-  );
-
   const content1 = data1.slice(headerRow1 + 1);
   const content2 = data2.slice(headerRow2 + 1);
 
-  // Helper to stringify row for identity check
-  const rowKey = (row: any[], originHeaders: string[]) => {
-    // Prefer identity columns if they exist and are not empty
-    const compareCols = identityCols.length > 0 ? identityCols : allHeaders;
-    const values = compareCols.map(h => {
-        const idx = originHeaders.indexOf(h);
-        const val = idx !== -1 ? row[idx] : undefined;
-        // Normalize 'O' marks and similar markers for better matching
-        const strVal = String(val ?? '').trim();
-        return strVal;
+  // If no unique columns are specified, fallback to using all headers
+  const colsToUse = uniqueColumns.length > 0 ? uniqueColumns : allHeaders;
+
+  // Helper to compute join key for a row
+  const getRowKey = (row: any[], headers: string[], cols: string[]) => {
+    const values = cols.map(col => {
+      const idx = headers.indexOf(col);
+      const val = idx !== -1 ? row[idx] : undefined;
+      const strVal = String(val ?? '').trim();
+      // Normalize 'O' marks and similar markers or trailing decimals
+      return strVal.endsWith('.0') ? strVal.slice(0, -2) : strVal;
     });
 
-    // If all key values are empty, this is an "Empty Row"
+    // Check if row is completely empty
     if (values.every(v => v === '')) {
       return `EMPTY_ROW_${Math.random()}`; 
     }
@@ -77,37 +71,50 @@ export const compareSheets = (
     return values.join('|||');
   };
 
-  const keys1 = content1.map(r => rowKey(r, h1));
-  const keys2 = content2.map(r => rowKey(r, h2));
+  // Build File 1 Map: key -> array of matching rows (to support duplicates if any)
+  const file1Map = new Map<string, { row: any[]; num: number; matched: boolean }[]>();
+  content1.forEach((row, idx) => {
+    const key = getRowKey(row, h1, colsToUse);
+    const rowNum = headerRow1 + idx + 2;
+    const list = file1Map.get(key) || [];
+    list.push({ row, num: rowNum, matched: false });
+    file1Map.set(key, list);
+  });
 
-  // LCS implementation
-  const n = keys1.length;
-  const m = keys2.length;
-  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  const finalRows: RowDiff[] = [];
+  let lastMatchedRow1Num = 0;
+  let addedOffset = 0;
 
-  for (let i = 1; i <= n; i++) {
-    for (let j = 1; j <= m; j++) {
-      if (keys1[i - 1] === keys2[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1] + 1;
-      } else {
-        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-      }
-    }
-  }
+  // Iterate over File 2 rows to match or find added rows
+  content2.forEach((row2, idx2) => {
+    const row2Num = headerRow2 + idx2 + 2;
+    const key = getRowKey(row2, h2, colsToUse);
+    
+    const file1Rows = file1Map.get(key);
+    const match = file1Rows?.find(r => !r.matched);
 
-  const rawDiff: RowDiff[] = [];
-  let i = n, j = m;
+    if (match) {
+      match.matched = true;
+      lastMatchedRow1Num = match.num;
+      addedOffset = 0;
 
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && keys1[i - 1] === keys2[j - 1]) {
       const cellDiffs: Record<string, CellDiff> = {};
       let isActuallyModified = false;
-      
+
       allHeaders.forEach(h => {
-        const val1 = content1[i - 1][h1.indexOf(h)];
-        const val2 = content2[j - 1][h2.indexOf(h)];
-        
-        if (String(val1 ?? '').trim() === String(val2 ?? '').trim()) {
+        const idx1 = h1.indexOf(h);
+        const idx2 = h2.indexOf(h);
+
+        const val1 = idx1 !== -1 ? match.row[idx1] : undefined;
+        const val2 = idx2 !== -1 ? row2[idx2] : undefined;
+
+        const str1 = val1 !== undefined ? String(val1).trim() : '';
+        const str2 = val2 !== undefined ? String(val2).trim() : '';
+
+        const norm1 = str1.endsWith('.0') ? str1.slice(0, -2) : str1;
+        const norm2 = str2.endsWith('.0') ? str2.slice(0, -2) : str2;
+
+        if (norm1 === norm2) {
           cellDiffs[h] = { type: 'unchanged', value: val1 } as any;
         } else {
           cellDiffs[h] = { type: 'modified', oldValue: val1, newValue: val2 };
@@ -115,115 +122,61 @@ export const compareSheets = (
         }
       });
 
-      rawDiff.unshift({ 
-        type: isActuallyModified ? 'modified' : 'unchanged', 
-        cells: cellDiffs, 
-        row1Num: headerRow1 + i + 1, 
-        row2Num: headerRow2 + j + 1 
-      });
-      i--; j--;
-    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      const cellDiffs: Record<string, CellDiff> = {};
-      allHeaders.forEach(h => {
-        cellDiffs[h] = { type: 'added', newValue: content2[j - 1][h2.indexOf(h)] };
-      });
-      rawDiff.unshift({ type: 'added', cells: cellDiffs, row2Num: headerRow2 + j + 1 });
-      j--;
+      finalRows.push({
+        type: isActuallyModified ? 'modified' : 'unchanged',
+        cells: cellDiffs,
+        row1Num: match.num,
+        row2Num: row2Num,
+        sortKey: match.num
+      } as any);
     } else {
+      addedOffset++;
       const cellDiffs: Record<string, CellDiff> = {};
       allHeaders.forEach(h => {
-        cellDiffs[h] = { type: 'removed', oldValue: content1[i - 1][h1.indexOf(h)] };
+        const idx2 = h2.indexOf(h);
+        const val2 = idx2 !== -1 ? row2[idx2] : undefined;
+        cellDiffs[h] = { type: 'added', newValue: val2 };
       });
-      rawDiff.unshift({ type: 'removed', cells: cellDiffs, row1Num: headerRow1 + i + 1 });
-      i--;
+
+      finalRows.push({
+        type: 'added',
+        cells: cellDiffs,
+        row2Num: row2Num,
+        sortKey: lastMatchedRow1Num + 0.0001 * addedOffset
+      } as any);
     }
-  }
+  });
 
-  // Final Pass: Merge blocks of Removed/Added rows by similarity
-  const finalRows: RowDiff[] = [];
-  let k = 0;
-  while (k < rawDiff.length) {
-    if (rawDiff[k].type === 'unchanged' || rawDiff[k].type === 'modified') {
-      finalRows.push(rawDiff[k]);
-      k++;
-      continue;
-    }
-
-    // Collect consecutive block of removed and added rows
-    const removedBlock: RowDiff[] = [];
-    const addedBlock: RowDiff[] = [];
-    while (k < rawDiff.length && rawDiff[k].type !== 'unchanged' && rawDiff[k].type !== 'modified') {
-      if (rawDiff[k].type === 'removed') removedBlock.push(rawDiff[k]);
-      else if (rawDiff[k].type === 'added') addedBlock.push(rawDiff[k]);
-      k++;
-    }
-
-    // Map to track used indices in blocks
-    const usedAdded = new Set<number>();
-    
-    // For each removed row, find the "best" match in the added block
-    for (let rIdx = 0; rIdx < removedBlock.length; rIdx++) {
-      const currentRemoved = removedBlock[rIdx];
-      let bestMatch: { idx: number; similarity: number; mergedCells: any } | null = null;
-
-      for (let aIdx = 0; aIdx < addedBlock.length; aIdx++) {
-        if (usedAdded.has(aIdx)) continue;
-        
-        const currentAdded = addedBlock[aIdx];
-        let matches = 0;
-        let total = 0;
-        const tempMergedCells: Record<string, CellDiff> = {};
-
+  // Collect remaining unmatched (removed) rows from File 1
+  for (const [_, list] of file1Map.entries()) {
+    list.forEach(match => {
+      if (!match.matched) {
+        const cellDiffs: Record<string, CellDiff> = {};
         allHeaders.forEach(h => {
-          const v1 = currentRemoved.cells[h]?.oldValue;
-          const v2 = currentAdded.cells[h]?.newValue;
-          
-          if (v1 !== undefined || v2 !== undefined) {
-             total++;
-             if (String(v1 ?? '').trim() === String(v2 ?? '').trim()) {
-               matches++;
-               tempMergedCells[h] = { type: 'unchanged', value: v1 } as any;
-             } else {
-               tempMergedCells[h] = { type: 'modified', oldValue: v1, newValue: v2 };
-             }
-          } else {
-             tempMergedCells[h] = { type: 'unchanged', value: undefined } as any;
-          }
+          const idx1 = h1.indexOf(h);
+          const val1 = idx1 !== -1 ? match.row[idx1] : undefined;
+          cellDiffs[h] = { type: 'removed', oldValue: val1 };
         });
 
-        const similarity = total > 0 ? (matches / total) : 0;
-        if (!bestMatch || similarity > bestMatch.similarity) {
-          bestMatch = { idx: aIdx, similarity, mergedCells: tempMergedCells };
-        }
-      }
-
-      // If a reasonably good match is found (or if it's the only option and we want to align by position)
-      // We use a threshold to prevent completely unrelated rows from merging.
-      // 0.2 is a loose threshold to allow highly modified but aligned rows to merge.
-      if (bestMatch && (bestMatch.similarity > 0.2 || removedBlock.length === addedBlock.length)) {
         finalRows.push({
-          type: 'modified',
-          cells: bestMatch.mergedCells,
-          row1Num: currentRemoved.row1Num,
-          row2Num: addedBlock[bestMatch.idx].row2Num
-        });
-        usedAdded.add(bestMatch.idx);
-      } else {
-        finalRows.push(currentRemoved);
+          type: 'removed',
+          cells: cellDiffs,
+          row1Num: match.num,
+          sortKey: match.num - 0.00005
+        } as any);
       }
-    }
-
-    // Add remaining unmatched added rows
-    for (let aIdx = 0; aIdx < addedBlock.length; aIdx++) {
-      if (!usedAdded.has(aIdx)) {
-        finalRows.push(addedBlock[aIdx]);
-      }
-    }
+    });
   }
+
+  // Sort rows to align them naturally based on their appearance
+  finalRows.sort((a: any, b: any) => a.sortKey - b.sortKey);
+  
+  // Clean up sortKey
+  finalRows.forEach((r: any) => delete r.sortKey);
 
   return {
     name: `${sheet1Name} vs ${sheet2Name}`,
     rows: finalRows,
     headers: allHeaders
   };
-};
+};;

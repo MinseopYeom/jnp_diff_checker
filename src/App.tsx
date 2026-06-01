@@ -40,12 +40,13 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ComparisonResult | null>(null);
-  const [showOnlyDiffs, setShowOnlyDiffs] = useState(false);
+  const [activeTab, setActiveTab] = useState<'all' | 'matched' | 'modified' | 'removed' | 'added'>('all');
+  const [uniqueColumns, setUniqueColumns] = useState<string[]>([]);
 
   const handleLoginSuccess = (credential: string) => {
     try {
       const decoded: GoogleUser = jwtDecode(credential);
-      
+
       // Security Check: Only @jnpmedi.com domain allowed
       // Check both email suffix and hosted domain (hd) field for robustness
       const isAuthorized = decoded.email.endsWith('@jnpmedi.com') || decoded.hd === 'jnpmedi.com';
@@ -101,6 +102,26 @@ export default function App() {
     workbook2 && selectedSheet2 ? getSheetData(workbook2, selectedSheet2) : []
     , [workbook2, selectedSheet2]);
 
+  const commonHeaders = useMemo(() => {
+    if (!sheetData1.length || !sheetData2.length) return [];
+    const h1 = (sheetData1[headerRow1] || []).map(h => String(h || '').trim());
+    const h2 = (sheetData2[headerRow2] || []).map(h => String(h || '').trim());
+    const set2 = new Set(h2.map(h => h.toUpperCase()));
+    return h1.filter(h => h && set2.has(h.toUpperCase()));
+  }, [sheetData1, sheetData2, headerRow1, headerRow2]);
+
+  useEffect(() => {
+    if (commonHeaders.length > 0) {
+      const identityKeywords = ['CODE', 'ID', 'PRIVILEGE', 'NAME', '번호', '코드', 'DESCRIPTION'];
+      const defaults = commonHeaders.filter(h =>
+        identityKeywords.some(k => h.toUpperCase().includes(k.toUpperCase()))
+      );
+      setUniqueColumns(defaults.length > 0 ? defaults : [commonHeaders[0]]);
+    } else {
+      setUniqueColumns([]);
+    }
+  }, [commonHeaders]);
+
   const handleCompare = () => {
     if (!workbook1 || !workbook2 || !selectedSheet1 || !selectedSheet2) return;
 
@@ -113,7 +134,8 @@ export default function App() {
         selectedSheet1,
         selectedSheet2,
         headerRow1,
-        headerRow2
+        headerRow2,
+        uniqueColumns
       );
 
       setResult({
@@ -136,7 +158,7 @@ export default function App() {
     setError(null);
     setHeaderRow1(0);
     setHeaderRow2(0);
-    setShowOnlyDiffs(false);
+    setActiveTab('all');
   };
 
   const handleDownloadExcel = () => {
@@ -144,9 +166,17 @@ export default function App() {
 
     try {
       const sheet = result.sheets[0];
-      const rows = showOnlyDiffs
-        ? sheet.rows.filter(r => r.type !== 'unchanged')
-        : sheet.rows;
+      
+      let rows = sheet.rows;
+      if (activeTab === 'matched') {
+        rows = sheet.rows.filter(r => r.type === 'unchanged' || r.type === 'modified');
+      } else if (activeTab === 'modified') {
+        rows = sheet.rows.filter(r => r.type === 'modified');
+      } else if (activeTab === 'removed') {
+        rows = sheet.rows.filter(r => r.type === 'removed');
+      } else if (activeTab === 'added') {
+        rows = sheet.rows.filter(r => r.type === 'added');
+      }
 
       const wsData = [
         ['Status', 'Row(L)', 'Row(R)', ...sheet.headers]
@@ -205,7 +235,7 @@ export default function App() {
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-full px-6 h-16 flex items-center justify-between">
-          <button 
+          <button
             onClick={reset}
             className="flex items-center gap-3 hover:opacity-80 transition-opacity active:scale-95 cursor-pointer text-left"
             title="Reset to home"
@@ -302,6 +332,58 @@ export default function App() {
               </div>
             </div>
 
+            {/* Unique Column Selection Section */}
+            {file1 && file2 && commonHeaders.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white p-6 rounded-2xl border border-slate-200 shadow-md mb-6"
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <Layers className="w-5 h-5 text-blue-600 animate-pulse" />
+                  <h3 className="font-bold text-sm text-slate-800 uppercase tracking-wider">
+                    Unique Column Configuration (Join Key)
+                  </h3>
+                  <span className="text-xs text-slate-400 font-medium">
+                    - Select columns to identify and match rows between files
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-2 max-h-[150px] overflow-y-auto p-1 custom-scrollbar">
+                  {commonHeaders.map((header) => {
+                    const isChecked = uniqueColumns.includes(header);
+                    return (
+                      <button
+                        key={header}
+                        onClick={() => {
+                          if (isChecked) {
+                            setUniqueColumns(uniqueColumns.filter((c) => c !== header));
+                          } else {
+                            setUniqueColumns([...uniqueColumns, header]);
+                          }
+                        }}
+                        className={cn(
+                          "px-4 py-2 text-xs font-bold rounded-xl border transition-all active:scale-95 cursor-pointer",
+                          isChecked
+                            ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-100"
+                            : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                        )}
+                      >
+                        {header}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {uniqueColumns.length === 0 && (
+                  <div className="mt-3 flex items-center gap-2 text-amber-600 text-xs font-semibold animate-pulse">
+                    <AlertCircle className="w-4 h-4" />
+                    Please select at least one unique column to proceed.
+                  </div>
+                )}
+              </motion.div>
+            )}
+
             {/* Actions Bar */}
             <div className="sticky bottom-6 flex flex-col items-center gap-4">
               {error && (
@@ -313,10 +395,10 @@ export default function App() {
 
               <button
                 onClick={handleCompare}
-                disabled={!workbook1 || !workbook2 || loading}
+                disabled={!workbook1 || !workbook2 || loading || uniqueColumns.length === 0}
                 className={cn(
                   "group relative px-12 py-4 bg-teal-500 text-white rounded-xl font-bold shadow-xl transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden",
-                  !loading && workbook1 && workbook2 && "hover:bg-teal-600 hover:shadow-teal-200"
+                  !loading && workbook1 && workbook2 && uniqueColumns.length > 0 && "hover:bg-teal-600 hover:shadow-teal-200"
                 )}
               >
                 <div className="flex items-center gap-3 relative z-10">
@@ -365,28 +447,15 @@ export default function App() {
 
               <div className="flex items-center gap-3 shrink-0">
                 <button
-                  onClick={() => setShowOnlyDiffs(!showOnlyDiffs)}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 border",
-                    showOnlyDiffs
-                      ? "bg-amber-50 text-amber-700 border-amber-200 shadow-sm"
-                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
-                  )}
-                >
-                  <Filter className="w-4 h-4" />
-                  {showOnlyDiffs ? "Show All Rows" : "Show Diffs Only"}
-                </button>
-
-                <button
                   onClick={handleDownloadExcel}
-                  className="flex items-center gap-2 px-4 py-3 bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-xl font-bold text-sm shadow-sm transition-all active:scale-95"
+                  className="flex items-center gap-2 px-4 py-3 bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-xl font-bold text-sm shadow-sm transition-all active:scale-95 cursor-pointer"
                 >
                   <Download className="w-4 h-4" /> Export Excel
                 </button>
 
                 <button
                   onClick={reset}
-                  className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95"
+                  className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95 cursor-pointer"
                 >
                   <RefreshCw className="w-4 h-4" /> New Comparison
                 </button>
@@ -395,7 +464,11 @@ export default function App() {
 
             {/* Results Table */}
             <div className="flex-1">
-              <DiffTable sheet={result.sheets[0]} showOnlyDiffs={showOnlyDiffs} />
+              <DiffTable 
+                sheet={result.sheets[0]} 
+                activeTab={activeTab} 
+                onTabChange={setActiveTab} 
+              />
             </div>
           </motion.div>
         )}
@@ -404,7 +477,7 @@ export default function App() {
       {/* Footer */}
       <footer className="py-12 px-4 border-t border-slate-200 mt-auto">
         <div className="max-w-full px-6 flex flex-col md:flex-row items-center justify-between gap-6 opacity-50">
-          <p className="text-sm">© 2026 Excel Diff Checker. Secure & Local.</p>
+          <p className="text-sm">© 2026 JNPMEDI Inc. All rights reserved.</p>
           <div className="flex items-center gap-4 text-sm font-medium">
             <a href="#" className="hover:text-blue-600 transition-colors">Documentation</a>
             <a href="#" className="hover:text-blue-600 transition-colors">Privacy</a>

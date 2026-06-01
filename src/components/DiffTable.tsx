@@ -5,13 +5,45 @@ import { ArrowRight, RefreshCw } from 'lucide-react';
 
 interface DiffTableProps {
   sheet: SheetDiff;
-  showOnlyDiffs?: boolean;
+  activeTab: 'all' | 'matched' | 'modified' | 'removed' | 'added';
+  onTabChange: (tab: 'all' | 'matched' | 'modified' | 'removed' | 'added') => void;
 }
 
-export const DiffTable: React.FC<DiffTableProps> = ({ sheet, showOnlyDiffs = false }) => {
-  const displayRows = showOnlyDiffs 
-    ? sheet.rows.filter(r => r.type !== 'unchanged')
-    : sheet.rows;
+export const DiffTable: React.FC<DiffTableProps> = ({ sheet, activeTab, onTabChange }) => {
+  const tabCounts = React.useMemo(() => {
+    const rows = sheet.rows;
+    return {
+      all: rows.length,
+      matched: rows.filter(r => r.type === 'unchanged' || r.type === 'modified').length,
+      modified: rows.filter(r => r.type === 'modified').length,
+      removed: rows.filter(r => r.type === 'removed').length,
+      added: rows.filter(r => r.type === 'added').length,
+    };
+  }, [sheet.rows]);
+
+  const displayRows = React.useMemo(() => {
+    switch (activeTab) {
+      case 'matched':
+        return sheet.rows.filter(r => r.type === 'unchanged' || r.type === 'modified');
+      case 'modified':
+        return sheet.rows.filter(r => r.type === 'modified');
+      case 'removed':
+        return sheet.rows.filter(r => r.type === 'removed');
+      case 'added':
+        return sheet.rows.filter(r => r.type === 'added');
+      case 'all':
+      default:
+        return sheet.rows;
+    }
+  }, [sheet.rows, activeTab]);
+
+  const tabs = [
+    { id: 'all', label: '전체 결과', count: tabCounts.all, color: 'text-slate-600 bg-slate-100 border-slate-200' },
+    { id: 'matched', label: '매칭 성공', count: tabCounts.matched, color: 'text-blue-600 bg-blue-50 border-blue-100' },
+    { id: 'modified', label: '값 변경됨', count: tabCounts.modified, color: 'text-amber-600 bg-amber-50 border-amber-100' },
+    { id: 'removed', label: '원본에만 존재 (삭제)', count: tabCounts.removed, color: 'text-red-600 bg-red-50 border-red-100' },
+    { id: 'added', label: '수정본에만 존재 (추가)', count: tabCounts.added, color: 'text-teal-600 bg-teal-50 border-teal-100' },
+  ] as const;
 
   if (sheet.rows.length === 0) {
     return (
@@ -29,6 +61,35 @@ export const DiffTable: React.FC<DiffTableProps> = ({ sheet, showOnlyDiffs = fal
 
   return (
     <div className="flex flex-col rounded-2xl border border-slate-200 shadow-2xl bg-white overflow-hidden max-h-[85vh] animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Interactive Tabs Header */}
+      <div className="bg-slate-50 border-b border-slate-200 px-6 py-3.5 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => onTabChange(tab.id)}
+                className={cn(
+                  "flex items-center gap-2.5 px-4 py-2 text-xs font-bold rounded-xl transition-all active:scale-95 cursor-pointer border",
+                  isActive
+                    ? "bg-white text-slate-900 border-slate-300 shadow-sm ring-1 ring-slate-200"
+                    : "bg-transparent text-slate-500 border-transparent hover:bg-slate-100/70 hover:text-slate-700"
+                )}
+              >
+                <span>{tab.label}</span>
+                <span className={cn(
+                  "px-2 py-0.5 text-[10px] font-black rounded-md leading-none border tabular-nums",
+                  tab.color
+                )}>
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="flex-1 overflow-auto custom-scrollbar relative">
         <table className="w-max min-w-full text-[11px] text-left border-collapse table-auto">
           <thead className="sticky top-0 z-30">
@@ -136,24 +197,28 @@ export const DiffTable: React.FC<DiffTableProps> = ({ sheet, showOnlyDiffs = fal
       </div>
 
       {/* Fixed Toolbar for Count */}
-      <div className="bg-slate-900 text-white px-6 py-3 flex items-center justify-between z-50 text-[10px] font-bold uppercase tracking-widest shadow-[0_-4px_12px_rgba(0,0,0,0.1)]">
+      <div className="bg-slate-900 text-white px-6 py-3.5 flex items-center justify-between z-20 text-[10px] font-bold uppercase tracking-widest shadow-[0_-4px_12px_rgba(0,0,0,0.1)]">
         <div className="flex items-center gap-8">
-           <span className="flex items-center gap-2">
-             <div className="w-2.5 h-2.5 rounded-full bg-teal-400 shadow-[0_0_8px_rgba(45,212,191,0.6)]" />
-             {sheet.rows.filter(r => r.type === 'added').length} Added
-           </span>
-           <span className="flex items-center gap-2">
-             <div className="w-2.5 h-2.5 rounded-full bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.6)]" />
-             {sheet.rows.filter(r => r.type === 'removed').length} Removed
+           <span className="flex items-center gap-2 text-slate-400">
+             <div className="w-2.5 h-2.5 rounded-full bg-slate-400 shadow-[0_0_8px_rgba(156,163,175,0.6)]" />
+             {sheet.rows.filter(r => r.type === 'unchanged').length} 동일 (Identical)
            </span>
            <span className="flex items-center gap-2">
              <div className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]" />
-             {sheet.rows.filter(r => r.type === 'modified').length} Modified
+             {tabCounts.modified} 값 변경 (Modified)
+           </span>
+           <span className="flex items-center gap-2">
+             <div className="w-2.5 h-2.5 rounded-full bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.6)]" />
+             {tabCounts.removed} 원본 전용 (Only File 1)
+           </span>
+           <span className="flex items-center gap-2">
+             <div className="w-2.5 h-2.5 rounded-full bg-teal-400 shadow-[0_0_8px_rgba(45,212,191,0.6)]" />
+             {tabCounts.added} 수정본 전용 (Only File 2)
            </span>
         </div>
         <div className="text-slate-400 flex items-center gap-3">
            <RefreshCw className="w-3.5 h-3.5 animate-pulse" />
-           <span className="text-slate-200">Total Differences: {sheet.rows.length}</span>
+           <span className="text-slate-200">전체 결과: {sheet.rows.length}행</span>
         </div>
       </div>
     </div>
